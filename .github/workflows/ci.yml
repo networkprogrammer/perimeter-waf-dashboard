@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install (hash-checked)
-        run: pip install --require-hashes --only-binary :all: -r requirements-dev.txt
+        run: "pip install --require-hashes --only-binary :all: -r requirements-dev.txt"
       - name: Backend tests
         run: python -m unittest tests.test_backend
       - name: Frontend regressions
