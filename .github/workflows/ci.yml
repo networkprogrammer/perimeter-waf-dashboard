@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"   # weekly, to catch newly published advisories
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install (hash-checked)
+        run: pip install --require-hashes --only-binary :all: -r requirements-dev.txt
+      - name: Backend tests
+        run: python -m unittest tests.test_backend
+      - name: Frontend regressions
+        run: node --experimental-vm-modules --test tests/test_frontend.mjs
+      - name: Runtime dependency audit
+        run: pip-audit -r requirements.txt --require-hashes --disable-pip
+      - name: Development dependency audit
+        run: pip-audit -r requirements-dev.txt --require-hashes --disable-pip
+      - name: Docker build
+        run: docker build -t waf-dashboard:ci .
+      - name: Hardened container smoke test (no AWS)
+        run: |
+          trap 'docker rm -f waf-dashboard-ci >/dev/null 2>&1 || true' EXIT
+          docker run -d --name waf-dashboard-ci --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --tmpfs /tmp:size=64m \
+            --tmpfs /data:uid=10001,gid=10001,mode=0700 \
+            -e WAF_DEV_FAKE=1 -e WAF_WHOIS=off waf-dashboard:ci
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec waf-dashboard-ci python -c "import json, urllib.request; base='http://127.0.0.1:8080'; assert json.load(urllib.request.urlopen(base + '/healthz'))['ok']; assert json.load(urllib.request.urlopen(base + '/api/events?range=24h'))['total'] > 0"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then docker logs waf-dashboard-ci; exit 1; fi
+          docker exec waf-dashboard-ci test -r /usr/share/licenses/waf-dashboard/LICENSE

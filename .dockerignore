@@ -1,0 +1,16 @@
+.env
+.git
+data
+tests
+docs
+*.md
+**/__pycache__
+.venv
+.env.*
+!.env.example
+accounts.json
+certs
+aws
+*.pem
+*.key
+.DS_Store

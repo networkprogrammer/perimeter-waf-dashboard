@@ -1,0 +1,5 @@
+# Runtime dependencies plus pinned offline test and audit tools.
+-r requirements.in
+httpx2==2.16.0
+pip-audit==2.10.1
+pip-tools==7.6.2

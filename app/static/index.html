@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" data-density="cozy">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Perimeter - WAF Watch</title>
+<link rel="preload" href="/static/fonts/archivo-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/spline-sans-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/big-shoulders-display-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0d10'/%3E%3Cpath d='M6 6h20v20H6z' fill='none' stroke='%23ff5b3a' stroke-width='3'/%3E%3Cpath d='M11 16h10' stroke='%23ff5b3a' stroke-width='3'/%3E%3C/svg%3E">
+<script type="module" src="/static/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-word">PERIMETER</span>
+    <span class="brand-kicker">WAF&nbsp;WATCH</span>
+  </div>
+
+  <div class="telemetry" aria-label="Engine status">
+    <div class="tm tm-conn" id="conn" data-state="connecting" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span><span class="tm-v" id="conn-text">Connecting</span>
+    </div>
+    <div class="tm" title="Age of the newest stored blocked event">
+      <span class="tm-k">Newest block</span><span class="tm-v mono" id="fresh-event">-</span>
+    </div>
+    <div class="tm" title="Time since the engine last polled Security Lake">
+      <span class="tm-k">Last poll</span><span class="tm-v mono" id="fresh-poll">-</span>
+    </div>
+    <div class="tm tm-cred" id="cred">
+      <span class="tm-k">Credential</span><span class="tm-v" id="cred-text">-</span>
+    </div>
+    <div class="tm tm-whois" id="whois" hidden>
+      <span class="tm-k">IP owners</span><span class="tm-v mono" id="whois-text">-</span>
+    </div>
+    <div class="tm tm-backfill" id="backfill" hidden>
+      <span class="tm-k">Backfill</span>
+      <span class="bf-bar" role="progressbar" aria-label="Backfill progress" aria-valuemin="0" aria-valuemax="100" id="bf-bar"><span id="bf-fill"></span></span>
+      <span class="tm-v mono" id="bf-text">0%</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button type="button" class="switch" id="live-toggle" role="switch" aria-checked="true" title="Live updates (L)">
+      <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span><span class="switch-label">Live</span>
+    </button>
+    <button type="button" class="tbtn" id="tz-toggle" aria-pressed="false" title="Toggle UTC / local time (U)">LOCAL</button>
+    <button type="button" class="tbtn" id="density-toggle" aria-pressed="false" title="Toggle row density (D)">COZY</button>
+    <button type="button" class="tbtn tbtn-icon" id="help-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+  </div>
+</header>
+
+<div id="banners" class="banners" aria-live="polite"></div>
+
+<nav class="tabs" aria-label="Views">
+  <div role="tablist" class="tablist">
+    <button type="button" role="tab" class="tab" id="tab-live" aria-controls="view-live" aria-selected="true" data-view="live">
+      <span class="tab-idx">01</span>Blocked traffic<span class="tab-badge" id="tab-live-badge" hidden>0</span>
+    </button>
+    <button type="button" role="tab" class="tab" id="tab-search" aria-controls="view-search" aria-selected="false" data-view="search" tabindex="-1">
+      <span class="tab-idx">02</span>Deep search<span class="tab-sub">full lake / Athena</span>
+    </button>
+  </div>
+  <ol class="wire" id="wire" aria-label="Latest blocks"></ol>
+</nav>
+
+<main id="main">
+<section id="view-live" class="view" role="tabpanel" aria-labelledby="tab-live">
+
+  <div class="filterbar" id="filterbar">
+    <div class="fb-row">
+      <div class="seg" role="group" aria-label="Time range" id="range-seg"></div>
+      <label class="search">
+        <span class="sr-only">Search blocked events</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+        <input type="search" id="q" placeholder="Search ip, host, path, rule, UA, args..." autocomplete="off" spellcheck="false">
+        <kbd aria-hidden="true">/</kbd>
+      </label>
+      <div class="fb-actions">
+        <button type="button" class="btn btn-ghost" id="export-btn" title="Download filtered blocked events as CSV">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10"/></svg>Export CSV
+        </button>
+      </div>
+    </div>
+    <div class="fb-row fb-row2">
+      <span class="chips-k" aria-hidden="true">Filter</span>
+      <div class="facet-btns" id="facet-btns" role="group" aria-label="Add filter"></div>
+    </div>
+    <div class="chips-row" id="chips-row" hidden>
+      <span class="chips-k">Applied</span>
+      <div class="chips" id="chips"></div>
+      <button type="button" class="btn-link" id="clear-all">Clear all</button>
+    </div>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Key figures"></section>
+
+  <div class="grid grid-main">
+    <section class="panel panel-chart" aria-labelledby="h-chart">
+      <header class="ph">
+        <h2 id="h-chart"><span class="ph-idx">A</span>Traffic over time</h2>
+        <div class="ph-meta mono" id="chart-meta"></div>
+        <div class="seg seg-sm" role="group" aria-label="Chart scale" id="chart-mode">
+          <button type="button" data-mode="split" aria-pressed="true">Split</button>
+          <button type="button" data-mode="log" aria-pressed="false">Log</button>
+        </div>
+      </header>
+      <div class="chart" id="chart" role="img" aria-label="Blocked and allowed requests over time. Drag to zoom."></div>
+      <p class="hint">Drag across the chart to zoom the window. Click a bucket to focus it.</p>
+    </section>
+
+    <section class="panel panel-rules" aria-labelledby="h-rules">
+      <header class="ph">
+        <h2 id="h-rules"><span class="ph-idx">B</span>Terminating rules</h2>
+        <div class="ph-meta mono" id="rules-meta"></div>
+      </header>
+      <div class="scope-break" id="scope-break"></div>
+      <ol class="rules" id="rules-list"></ol>
+    </section>
+  </div>
+
+  <div class="grid grid-tops" id="tops"></div>
+
+  <section class="panel panel-table" aria-labelledby="h-table">
+    <header class="ph">
+      <h2 id="h-table"><span class="ph-idx">D</span>Blocked requests</h2>
+      <div class="ph-meta mono" id="table-meta"></div>
+      <button type="button" class="pill-new" id="new-pill" hidden></button>
+      <div class="ph-right">
+        <label class="sel">Rows
+          <select id="page-size">
+            <option>50</option><option selected>100</option><option>250</option><option>500</option>
+          </select>
+        </label>
+      </div>
+    </header>
+    <div class="table-wrap" id="table-wrap">
+      <table class="evt" id="evt-table">
+        <caption class="sr-only">Blocked requests. Use j and k to move, Enter to open details.</caption>
+        <thead><tr id="evt-head"></tr></thead>
+        <tbody id="evt-body"></tbody>
+      </table>
+      <div class="table-state" id="table-state" hidden></div>
+    </div>
+    <footer class="pager" id="pager"></footer>
+  </section>
+</section>
+
+<section id="view-search" class="view" role="tabpanel" aria-labelledby="tab-search" hidden>
+  <div class="ds">
+    <form class="ds-form panel" id="ds-form" novalidate>
+      <header class="ph"><h2><span class="ph-idx">S</span>Deep search</h2></header>
+      <p class="ds-lede">Queries the full Security Lake, allowed and blocked, through Athena. Expect 10-60&nbsp;s. At least one narrowing filter is required.</p>
+      <fieldset class="ds-disp">
+        <legend>Disposition</legend>
+        <label><input type="radio" name="disposition" value="" checked><span>Both</span></label>
+        <label><input type="radio" name="disposition" value="Allowed"><span>Allowed</span></label>
+        <label><input type="radio" name="disposition" value="Blocked"><span>Blocked</span></label>
+      </fieldset>
+      <div class="ds-grid">
+        <label>Source IP<input name="ip" class="mono" placeholder="203.0.113.7" autocomplete="off" spellcheck="false"></label>
+        <label>Host<input name="host" class="mono" placeholder="app.example.com" autocomplete="off" spellcheck="false" list="ds-hosts"></label>
+        <label>Account ID<input name="account" class="mono" placeholder="123456789012" inputmode="numeric" autocomplete="off" list="ds-accounts"></label>
+        <label>Path contains<input name="path" class="mono" placeholder="/login" autocomplete="off" spellcheck="false"></label>
+        <label>Country<input name="country" class="mono" placeholder="US" maxlength="2" autocomplete="off" spellcheck="false"></label>
+        <label>Rule<input name="rule" class="mono" placeholder="rule name" autocomplete="off" spellcheck="false" list="ds-rules"></label>
+        <label>Method
+          <select name="method"><option value="">Any</option><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option><option>HEAD</option><option>OPTIONS</option></select>
+        </label>
+        <label>Status<input name="status" class="mono" placeholder="403" inputmode="numeric" autocomplete="off"></label>
+        <label>Lookback (hours)<input name="hours" class="mono" type="number" min="0.25" max="24" step="0.25" value="1"></label>
+        <label>Region
+          <select name="region" id="ds-region"><option value="all">All regions</option></select>
+        </label>
+        <label>Row limit
+          <select name="limit"><option>100</option><option selected>500</option><option>1000</option><option>2000</option></select>
+        </label>
+      </div>
+      <datalist id="ds-accounts"></datalist>
+      <datalist id="ds-rules"></datalist>
+      <datalist id="ds-hosts"></datalist>
+      <div class="ds-err" id="ds-err" role="alert" hidden></div>
+      <div class="ds-actions">
+        <button type="submit" class="btn btn-primary" id="ds-run">Run search</button>
+        <button type="button" class="btn btn-ghost" id="ds-reset">Reset</button>
+      </div>
+    </form>
+
+    <section class="panel ds-results" aria-labelledby="h-ds">
+      <header class="ph">
+        <h2 id="h-ds"><span class="ph-idx">R</span>Results</h2>
+        <div class="ph-meta mono" id="ds-meta"></div>
+        <div class="ph-right">
+          <label class="search search-sm"><span class="sr-only">Filter results</span>
+            <input type="search" id="ds-filter" placeholder="Filter results..." autocomplete="off" spellcheck="false" disabled>
+          </label>
+          <button type="button" class="btn btn-ghost" id="ds-csv" disabled>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10"/></svg>CSV
+          </button>
+        </div>
+      </header>
+      <div class="ds-body" id="ds-body"></div>
+    </section>
+  </div>
+</section>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+  <header class="drawer-h">
+    <div class="drawer-hl">
+      <div class="drawer-kicker mono" id="drawer-kicker">Blocked request</div>
+      <h2 id="drawer-title">Event</h2>
+    </div>
+    <div class="drawer-nav">
+      <button type="button" class="tbtn tbtn-icon" id="drawer-prev" aria-label="Previous event" title="Previous (k)">&#8593;</button>
+      <button type="button" class="tbtn tbtn-icon" id="drawer-next" aria-label="Next event" title="Next (j)">&#8595;</button>
+      <button type="button" class="tbtn tbtn-icon" id="drawer-close" aria-label="Close details" title="Close (Esc)">&#215;</button>
+    </div>
+  </header>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<div class="popover" id="popover" hidden></div>
+<div class="tooltip" id="tooltip" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog class="help" id="help" aria-labelledby="help-title">
+  <header class="ph"><h2 id="help-title">Keyboard</h2><button type="button" class="tbtn tbtn-icon" id="help-close" aria-label="Close">&#215;</button></header>
+  <dl class="keys">
+    <dt><kbd>/</kbd></dt><dd>Focus search</dd>
+    <dt><kbd>j</kbd> <kbd>&#8595;</kbd></dt><dd>Next row</dd>
+    <dt><kbd>k</kbd> <kbd>&#8593;</kbd></dt><dd>Previous row</dd>
+    <dt><kbd>Enter</kbd></dt><dd>Open row details</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Close drawer / popover</dd>
+    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous / next page</dd>
+    <dt><kbd>g</kbd></dt><dd>Jump to newest</dd>
+    <dt><kbd>i</kbd> <kbd>r</kbd> <kbd>h</kbd> <kbd>o</kbd></dt><dd>Drawer: filter by IP / rule / host / org</dd>
+    <dt><kbd>s</kbd></dt><dd>Drawer: deep search this IP</dd>
+    <dt><kbd>l</kbd></dt><dd>Toggle live</dd>
+    <dt><kbd>u</kbd></dt><dd>Toggle UTC</dd>
+    <dt><kbd>d</kbd></dt><dd>Toggle density</dd>
+    <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Switch view</dd>
+    <dt><kbd>?</kbd></dt><dd>This help</dd>
+  </dl>
+</dialog>
+</body>
+</html>

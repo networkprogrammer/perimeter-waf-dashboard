@@ -1,0 +1,5 @@
+{
+  "111111111111": "web-storefront-prod",
+  "222222222222": "api-gateway-prod",
+  "333333333333": "analytics-dev"
+}

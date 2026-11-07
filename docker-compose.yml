@@ -1,0 +1,74 @@
+# Copy .env.example to .env, fill in the values, then: docker compose up -d --build
+services:
+  waf-dashboard:
+    build: .
+    image: waf-dashboard:latest
+    container_name: waf-dashboard
+    restart: unless-stopped
+    ports:
+      # Loopback by default because the dashboard has no built-in user management.
+      # Set WAF_BIND=0.0.0.0 only behind a firewall, VPN or authenticating reverse proxy.
+      - "${WAF_BIND:-127.0.0.1}:${WAF_PORT:-8080}:8080"
+    # Compose reads ./.env for these substitutions. Empty means "use the application default".
+    environment:
+      WAF_REGIONS: "${WAF_REGIONS:-us-east-1}"
+      WAF_ATHENA_WORKGROUP: "${WAF_ATHENA_WORKGROUP:-primary}"
+      WAF_ATHENA_OUTPUT: "${WAF_ATHENA_OUTPUT:-}"
+      WAF_SL_DB_TEMPLATE: "${WAF_SL_DB_TEMPLATE:-}"
+      WAF_SL_TABLE_TEMPLATE: "${WAF_SL_TABLE_TEMPLATE:-}"
+      WAF_AWS_PROFILE: "${WAF_AWS_PROFILE:-}"
+      WAF_ASSUME_ROLE_ARN: "${WAF_ASSUME_ROLE_ARN:-}"
+      WAF_ASSUME_ROLE_EXTERNAL_ID: "${WAF_ASSUME_ROLE_EXTERNAL_ID:-}"
+      WAF_BACKFILL_HOURS: "${WAF_BACKFILL_HOURS:-24}"
+      WAF_RETENTION_HOURS: "${WAF_RETENTION_HOURS:-72}"
+      WAF_POLL_SECONDS: "${WAF_POLL_SECONDS:-30}"
+      WAF_AGG_SECONDS: "${WAF_AGG_SECONDS:-60}"
+      WAF_ATHENA_CONCURRENCY: "${WAF_ATHENA_CONCURRENCY:-3}"
+      WAF_MAX_STREAMS: "${WAF_MAX_STREAMS:-50}"
+      WAF_API_QUERY_TIMEOUT: "${WAF_API_QUERY_TIMEOUT:-15}"
+      WAF_DEV_FAKE: "${WAF_DEV_FAKE:-}"
+      WAF_ACCOUNTS_FILE: "${WAF_ACCOUNTS_FILE:-}"
+      WAF_RULE_STRIP_PREFIXES: "${WAF_RULE_STRIP_PREFIXES:-}"
+      WAF_WHOIS: "${WAF_WHOIS:-public}"
+      WAF_BASIC_AUTH: "${WAF_BASIC_AUTH:-}"
+      WAF_ALLOWED_HOSTS: "${WAF_ALLOWED_HOSTS:-}"
+      WAF_SEARCH_PER_CLIENT_HOUR: "${WAF_SEARCH_PER_CLIENT_HOUR:-}"
+      WAF_SEARCH_GLOBAL_HOUR: "${WAF_SEARCH_GLOBAL_HOUR:-}"
+      WAF_SEARCH_DAILY_SCAN_GB: "${WAF_SEARCH_DAILY_SCAN_GB:-}"
+      # Address of a reverse proxy whose X-Forwarded-For header may be trusted (per-client limits, logs)
+      FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-127.0.0.1}"
+      # Forward temporary environment credentials without writing them into the image.
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN:-}"
+      # Uncomment for shared profiles (see volumes and docs/iam.md).
+      # AWS_CONFIG_FILE: /aws/config
+      # AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
+      # For SSO, mount only the cache beneath the container user's HOME:
+      # HOME: /home/app
+    volumes:
+      - waf-data:/data
+      # Optional: friendly account names (see accounts.example.json), then set WAF_ACCOUNTS_FILE=/config/accounts.json
+      # - ./accounts.json:/config/accounts.json:ro
+      # Optional: a shared AWS config directory for profile or credential_process based auth (for example
+      # IAM Roles Anywhere), then set WAF_AWS_PROFILE and both AWS file paths above.
+      # The mounted files must be readable by uid 10001; keep them off shared/public storage.
+      # - ~/.aws:/aws:ro
+      # Optional SSO cache, with HOME=/home/app above. Log in on the host first.
+      # - ~/.aws/sso/cache:/home/app/.aws/sso/cache:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    cpus: 1.5
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+volumes:
+  waf-data:
