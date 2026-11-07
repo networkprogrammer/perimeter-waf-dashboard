@@ -74,5 +74,5 @@ If the cache is disposable, use a new empty volume rather than deleting the old 
 - Finalize release ownership/permission and retain the MIT and font license notices.
 - Run backend/frontend tests, the dependency audit, and the container smoke check.
 - Review the exact files and screenshots being published, plus Git history if the repository has one.
-- Enable GitHub private vulnerability reporting before directing users to that channel.
-- Tag a tested release and update [CHANGELOG.md](../CHANGELOG.md). No release tag is created by this export.
+- Keep GitHub private vulnerability reporting enabled; [SECURITY.md](../SECURITY.md) directs users to that channel.
+- Tag a tested release and update [CHANGELOG.md](../CHANGELOG.md).
